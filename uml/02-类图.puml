@@ -1,0 +1,87 @@
+@startuml
+' 二手交易平台 - 核心类图
+
+package "用户与权限" {
+  class User {
+    +id: int
+    +username: str
+    +password: str
+    +email: str
+    +role: str
+    +credit: int
+  }
+  class Admin
+  User <|-- Admin
+}
+
+package "商品与分类" {
+  class Item {
+    +id: int
+    +title: str
+    +description: str
+    +price: float
+    +status: str
+    +seller_id: int
+    +category_id: int
+  }
+  class Category {
+    +id: int
+    +name: str
+  }
+  Item --> Category
+  User "1" -- "*" Item : 发布
+}
+
+package "订单与议价" {
+  class Order {
+    +id: int
+    +buyer_id: int
+    +item_id: int
+    +status: str
+    +total_price: float
+  }
+  class BargainLog {
+    +id: int
+    +order_id: int
+    +buyer_offer: float
+    +seller_offer: float
+    +timestamp: datetime
+  }
+  Order --> Item
+  User "1" -- "*" Order : 下单
+  Order "1" -- "*" BargainLog : 议价记录
+}
+
+package "消息与评价" {
+  class Message {
+    +id: int
+    +sender_id: int
+    +receiver_id: int
+    +content: str
+    +timestamp: datetime
+  }
+  class Review {
+    +id: int
+    +user_id: int
+    +item_id: int
+    +rating: int
+    +comment: str
+  }
+  User "1" -- "*" Message : 发送/接收
+  User "1" -- "*" Review : 评价
+  Item "1" -- "*" Review
+}
+
+package "AI智能体" {
+  class SellerAgent
+  class BuyerAgent
+  class NegotiationSession
+  class MarketData
+  class BargainRules
+  SellerAgent <|-- NegotiationSession
+  BuyerAgent <|-- NegotiationSession
+  NegotiationSession --> BargainRules
+  NegotiationSession --> MarketData
+}
+
+@enduml

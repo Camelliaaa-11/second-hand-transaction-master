@@ -1,0 +1,138 @@
+@startuml 卖家处理议价流程
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "卖家" as Seller
+participant "Chat.vue" as ChatPage
+participant "Flask API" as API
+participant "Database" as DB
+participant "Socket.IO" as Socket
+actor "买家" as Buyer
+
+== 卖家收到买家议价 ==
+Buyer -> Socket: 买家发起议价
+activate Socket
+Socket -> Seller: emit('new_msg', 议价消息)
+deactivate Socket
+
+Seller -> ChatPage: 查看议价消息
+activate ChatPage
+ChatPage --> Seller: 显示议价卡片
+note right of Seller
+  🗡️ 砍价申请
+  "【议价申请】期望价格65元"
+  
+  操作按钮：
+  - 🤖智能回复
+  - 拒绝
+  - 同意改价
+end note
+deactivate ChatPage
+
+== 情况1：卖家直接同意 ==
+Seller -> ChatPage: 点击"同意改价"
+activate ChatPage
+ChatPage -> ChatPage: handleBargain(msg, 'accept')
+ChatPage -> ChatPage: 提取item_id和buyer_id
+
+ChatPage -> API: POST /api/v1/bargain/handle
+note left
+  {
+    item_id: 商品ID,
+    buyer_id: 买家ID,
+    action: "accept"
+  }
+end note
+
+activate API
+API -> DB: 查询议价记录
+activate DB
+DB --> API: BargainLog记录
+deactivate DB
+
+API -> DB: 更新商品价格为买家出价
+activate DB
+note right of DB
+  UPDATE items
+  SET current_price = buyer_offer
+  WHERE id = item_id
+end note
+DB --> API: 价格更新成功
+deactivate DB
+
+API -> DB: 更新议价状态为"已接受"
+activate DB
+note right of DB
+  UPDATE bargain_logs
+  SET status = 'accepted',
+      final_price = buyer_offer
+  WHERE item_id = item_id
+    AND buyer_id = buyer_id
+    AND status = 'pending'
+end note
+DB --> API: 状态更新成功
+deactivate DB
+
+API --> ChatPage: {success: true}
+deactivate API
+
+ChatPage -> ChatPage: showSuccessToast("已同意，价格已修改")
+ChatPage -> ChatPage: 添加系统消息到聊天列表
+note left of ChatPage
+  "【系统】我同意了议价，价格已修改。"
+end note
+ChatPage -> ChatPage: scrollToBottom()
+ChatPage --> Seller: 操作完成
+deactivate ChatPage
+
+== 情况2：卖家直接拒绝 ==
+Seller -> ChatPage: 点击"拒绝"
+activate ChatPage
+ChatPage -> ChatPage: handleBargain(msg, 'reject')
+
+ChatPage -> API: POST /api/v1/bargain/handle
+note left
+  {
+    item_id: 商品ID,
+    buyer_id: 买家ID,
+    action: "reject"
+  }
+end note
+
+activate API
+API -> DB: 更新议价状态为"已拒绝"
+activate DB
+note right of DB
+  UPDATE bargain_logs
+  SET status = 'rejected'
+  WHERE item_id = item_id
+    AND buyer_id = buyer_id
+    AND status = 'pending'
+end note
+DB --> API: 状态更新成功
+deactivate DB
+
+API --> ChatPage: {success: true}
+deactivate API
+
+ChatPage -> ChatPage: showSuccessToast("已拒绝")
+ChatPage -> ChatPage: 添加系统消息
+note left of ChatPage
+  "【系统】我拒绝了议价。"
+end note
+ChatPage -> ChatPage: scrollToBottom()
+ChatPage --> Seller: 操作完成
+deactivate ChatPage
+
+== 情况3：卖家使用AI智能回复（见03图） ==
+note over Seller, ChatPage
+  详见：03-卖家AI智能回复流程.puml
+  
+  卖家点击"🤖智能回复"
+  → 获取AI建议
+  → 可选修改价格/话术
+  → 采纳并发送
+end note
+
+@enduml

@@ -1,0 +1,23 @@
+@startuml
+' 二手交易平台 - 用例图
+left to right direction
+actor 用户 as User
+actor 卖家 as Seller
+actor 买家 as Buyer
+actor 管理员 as Admin
+
+rectangle "二手交易平台系统" {
+  User -- (注册/登录)
+  User -- (浏览商品)
+  Buyer -- (发起议价)
+  Buyer -- (下单支付)
+  Buyer -- (评价商品)
+  Seller -- (发布商品)
+  Seller -- (处理议价)
+  Seller -- (发货)
+  User -- (消息聊天)
+  Admin -- (管理用户)
+  Admin -- (管理商品)
+  Admin -- (管理订单)
+}
+@enduml

@@ -1,0 +1,70 @@
+@startuml 买家发起议价流程
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "买家" as Buyer
+participant "Detail.vue" as DetailPage
+participant "Chat.vue" as ChatPage
+participant "Flask API" as API
+participant "Database" as DB
+participant "Socket.IO" as Socket
+actor "卖家" as Seller
+
+== 买家浏览商品并发起议价 ==
+Buyer -> DetailPage: 打开商品详情页
+activate DetailPage
+DetailPage -> API: GET /api/v1/items/:id
+activate API
+API -> DB: 查询商品信息
+activate DB
+DB --> API: 返回商品数据
+deactivate DB
+API --> DetailPage: 商品详情
+deactivate API
+DetailPage --> Buyer: 显示商品信息
+
+Buyer -> DetailPage: 点击"砍价"按钮
+DetailPage -> DetailPage: 打开议价弹窗
+Buyer -> DetailPage: 输入期望价格
+Buyer -> DetailPage: 点击"发送议价"
+DetailPage -> API: POST /api/v1/bargain/offer\n{item_id, buyer_id, offered_price}
+deactivate DetailPage
+
+activate API
+API -> DB: 创建BargainLog记录
+activate DB
+DB --> API: 记录创建成功
+deactivate DB
+API --> DetailPage: {success: true}
+activate DetailPage
+deactivate API
+
+DetailPage -> ChatPage: 跳转到聊天页面
+deactivate DetailPage
+activate ChatPage
+
+ChatPage -> Socket: emit('send_msg', {\n  senderId: buyer_id,\n  receiverId: seller_id,\n  content: "【议价申请】期望价格65元",\n  msg_type: "议价通知",\n  item_id, item\n})
+
+activate Socket
+Socket -> DB: 保存消息
+activate DB
+DB --> Socket: 保存成功
+deactivate DB
+Socket -> Seller: emit('new_msg', 议价消息)
+Socket --> ChatPage: 消息发送成功
+deactivate Socket
+
+ChatPage -> ChatPage: 本地添加消息到列表
+ChatPage -> ChatPage: scrollToBottom()
+ChatPage --> Buyer: 显示"议价申请已发送"
+deactivate ChatPage
+
+Seller -> Seller: 收到议价通知
+note right of Seller
+  卖家在聊天页面看到
+  带有"🗡️ 砍价申请"标签
+  的议价卡片
+end note
+
+@enduml

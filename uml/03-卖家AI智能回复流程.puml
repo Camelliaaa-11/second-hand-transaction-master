@@ -1,0 +1,161 @@
+@startuml
+'!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "卖家" as Seller
+participant "Chat.vue" as ChatPage
+participant "Flask API" as API
+participant "Agent Service" as AgentService
+participant "SellerAgent" as Agent
+participant "Database" as DB
+participant "Socket.IO" as Socket
+actor "买家" as Buyer
+
+== 卖家请求AI智能建议 ==
+Seller -> ChatPage: 点击"🤖智能回复"按钮
+activate ChatPage
+ChatPage -> ChatPage: getSellerAdvice(msg)
+ChatPage -> ChatPage: 提取买家出价\nextractBuyerOffer(msg.content)
+ChatPage -> ChatPage: 打开智能回复弹窗\nshowSellerAdviceDialog = true
+ChatPage -> ChatPage: loadingSellerAdvice = true
+
+ChatPage -> API: POST /api/agent/seller-advice
+note left
+  请求参数：
+  {
+    user_id: 卖家ID,
+    item_id: 商品ID,
+    item_listed_price: 标价,
+    seller_min_price: 底价,
+    buyer_offer: 买家出价,
+    is_urgent_sale: 是否急售,
+    buyer_id: 买家ID,
+    item_category: 商品类别,
+    item_condition: 商品成色
+  }
+end note
+
+activate API
+API -> AgentService: 转发请求到智能体服务
+activate AgentService
+
+AgentService -> DB: 获取买家信用评分
+activate DB
+DB --> AgentService: buyer_credit_score
+deactivate DB
+
+AgentService -> DB: 获取市场数据\n(同类商品均价)
+activate DB
+DB --> AgentService: market_data
+deactivate DB
+
+AgentService -> Agent: 创建SellerAgent实例
+activate Agent
+Agent -> Agent: 初始化议价上下文\nNegotiationContext
+Agent -> Agent: 应用议价规则\napply_bargain_rules()
+
+Agent -> Agent: 判断是否接受买家出价
+alt 买家出价 >= 卖家底价
+    Agent -> Agent: action = "ACCEPT"
+    Agent -> Agent: 生成接受话术
+else 买家出价 < 卖家底价 且有议价空间
+    Agent -> Agent: action = "COUNTER_OFFER"
+    Agent -> Agent: 计算合理还价价格
+    Agent -> Agent: 生成还价话术
+else 买家出价过低
+    Agent -> Agent: action = "REJECT"
+    Agent -> Agent: 生成拒绝话术
+end
+
+Agent --> AgentService: 返回AI建议
+note left
+  {
+    action: "COUNTER_OFFER",
+    price: 70,
+    message: "70元可以出手，您看怎么样？",
+    reasoning: "买家出价略低，建议还价..."
+  }
+end note
+deactivate Agent
+
+AgentService --> API: AI建议结果
+deactivate AgentService
+API --> ChatPage: 返回AI建议
+deactivate API
+
+ChatPage -> ChatPage: sellerAdvice = 建议数据
+ChatPage -> ChatPage: customSellerPrice = 建议价格
+ChatPage -> ChatPage: loadingSellerAdvice = false
+ChatPage --> Seller: 显示AI建议
+note right of Seller
+  显示内容：
+  - 建议动作标签
+  - AI推荐价格
+  - 建议话术
+  - 策略分析
+  - 可调整价格和话术
+end note
+deactivate ChatPage
+
+== 卖家采纳AI建议并发送 ==
+Seller -> ChatPage: 点击"采纳并发送"
+activate ChatPage
+ChatPage -> ChatPage: adoptSellerAdvice()
+
+alt 卖家修改了价格
+    ChatPage -> API: POST /api/v1/bargain/handle
+    note left
+      {
+        item_id,
+        buyer_id,
+        action: "counter",
+        counter_price: 自定义价格
+      }
+    end note
+    activate API
+    API -> DB: 更新议价记录
+    activate DB
+    DB --> API: 更新成功
+    deactivate DB
+    API --> ChatPage: 还价成功
+    deactivate API
+end
+
+ChatPage -> Socket: emit('send_msg', {\n  senderId: 卖家ID,\n  receiverId: 买家ID,\n  content: AI生成的话术,\n  msg_type: "文本"\n})
+activate Socket
+Socket -> DB: 保存消息
+activate DB
+DB --> Socket: 保存成功
+deactivate DB
+Socket -> Buyer: emit('new_msg', 消息)
+Socket --> ChatPage: 消息发送成功
+deactivate Socket
+
+ChatPage -> ChatPage: 本地添加消息到列表
+ChatPage -> ChatPage: showSuccessToast("AI建议已发送")
+ChatPage -> ChatPage: showSellerAdviceDialog = false
+
+alt AI建议是接受 且 未修改价格
+    ChatPage -> ChatPage: handleBargain(msg, 'accept')
+    ChatPage -> API: POST /api/v1/bargain/handle\n{item_id, buyer_id, action: "accept"}
+    activate API
+    API -> DB: 更新商品价格
+    activate DB
+    DB --> API: 价格更新成功
+    deactivate DB
+    API -> DB: 更新议价状态为"已接受"
+    activate DB
+    DB --> API: 状态更新成功
+    deactivate DB
+    API --> ChatPage: 处理成功
+    deactivate API
+    ChatPage -> ChatPage: 显示"已同意，价格已修改"
+end
+
+ChatPage --> Seller: AI回复已发送
+deactivate ChatPage
+
+Buyer -> Buyer: 收到卖家回复
+
+@enduml

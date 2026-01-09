@@ -1,0 +1,67 @@
+@startuml 用户聊天消息流程
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "用户A" as UserA
+participant "Chat.vue" as Vue
+participant "Socket.IO Client" as SocketClient
+participant "Flask-SocketIO Server" as SocketServer
+participant "Database" as DB
+actor "用户B" as UserB
+
+== 用户加入聊天室 ==
+UserA -> Vue: 打开聊天页面 /chat/:id
+activate Vue
+Vue -> Vue: 获取当前用户ID和好友ID
+Vue -> SocketClient: 创建Socket连接
+activate SocketClient
+SocketClient -> SocketServer: 建立WebSocket连接
+activate SocketServer
+SocketServer --> SocketClient: 连接成功
+SocketClient -> SocketServer: emit('join', {myId, friendId})
+SocketServer -> SocketServer: 将用户加入房间
+SocketServer --> SocketClient: 加入成功
+deactivate SocketServer
+
+== 获取历史消息 ==
+Vue -> SocketServer: GET /api/v1/messages/history
+activate SocketServer
+SocketServer -> DB: 查询历史消息
+activate DB
+DB --> SocketServer: 返回消息列表
+deactivate DB
+SocketServer --> Vue: 返回历史消息
+deactivate SocketServer
+Vue -> Vue: 渲染消息列表
+Vue -> Vue: 滚动到底部
+Vue --> UserA: 显示聊天界面
+deactivate Vue
+
+== 发送消息 ==
+UserA -> Vue: 输入消息并点击发送
+activate Vue
+Vue -> SocketClient: emit('send_msg', {senderId, receiverId, content, msg_type})
+SocketClient -> SocketServer: 发送消息事件
+activate SocketServer
+SocketServer -> DB: 保存消息到数据库
+activate DB
+DB --> SocketServer: 保存成功
+deactivate DB
+SocketServer -> SocketServer: 查找接收方房间
+SocketServer -> UserB: emit('new_msg', message)
+SocketServer --> SocketClient: 消息发送确认
+deactivate SocketServer
+SocketClient --> Vue: 消息已发送
+Vue -> Vue: 清空输入框
+deactivate Vue
+
+== 接收消息 ==
+UserB -> Vue: 监听new_msg事件
+activate Vue
+Vue -> Vue: list.value.push(msg)
+Vue -> Vue: scrollToBottom()
+Vue --> UserB: 显示新消息
+deactivate Vue
+
+@enduml

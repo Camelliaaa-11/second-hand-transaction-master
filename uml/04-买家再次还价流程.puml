@@ -1,0 +1,100 @@
+@startuml 买家再次还价流程
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "买家" as Buyer
+participant "Chat.vue" as ChatPage
+participant "Flask API" as API
+participant "Database" as DB
+participant "Socket.IO" as Socket
+actor "卖家" as Seller
+
+== 买家收到卖家还价 ==
+Seller -> Socket: 卖家发送还价消息
+activate Socket
+Socket -> Buyer: emit('new_msg', 卖家还价消息)
+deactivate Socket
+
+Buyer -> ChatPage: 查看消息
+activate ChatPage
+ChatPage -> ChatPage: 识别消息包含"【卖家还价】"
+ChatPage --> Buyer: 显示还价卡片
+note right of Buyer
+  卡片显示：
+  💰 卖家还价
+  "70元可以出手，您看怎么样？"
+  
+  操作按钮：
+  - 💬 我要还价
+  - 拒绝
+  - 接受还价
+end note
+deactivate ChatPage
+
+== 买家选择再次还价 ==
+Buyer -> ChatPage: 点击"💬 我要还价"
+activate ChatPage
+ChatPage -> ChatPage: openBuyerCounterOffer(msg)
+ChatPage -> ChatPage: 提取卖家还价价格\nextractPrice(msg.content)
+ChatPage -> ChatPage: buyerCounterPrice = 卖家价格 - 1
+ChatPage -> ChatPage: showBuyerCounterDialog = true
+ChatPage --> Buyer: 打开还价弹窗
+deactivate ChatPage
+
+Buyer -> ChatPage: 输入新的还价金额
+Buyer -> ChatPage: 点击"发送还价"
+activate ChatPage
+ChatPage -> ChatPage: sendBuyerCounterOffer()
+
+ChatPage -> API: POST /api/v1/bargain/offer
+note left
+  {
+    item_id: 商品ID,
+    buyer_id: 买家ID,
+    offered_price: 新出价
+  }
+end note
+
+activate API
+API -> DB: 创建新的BargainLog记录
+activate DB
+note right of DB
+  记录内容：
+  - item_id
+  - buyer_id
+  - offered_price
+  - status: 'pending'
+  - created_at: 当前时间
+end note
+DB --> API: 记录创建成功
+deactivate DB
+API --> ChatPage: {success: true}
+deactivate API
+
+ChatPage -> Socket: emit('send_msg', {\n  senderId: 买家ID,\n  receiverId: 卖家ID,\n  content: "【议价申请】便宜点啦，{price}元可以不？",\n  msg_type: "文本",\n  item_id, item\n})
+
+activate Socket
+Socket -> DB: 保存聊天消息
+activate DB
+DB --> Socket: 保存成功
+deactivate DB
+Socket -> Seller: emit('new_msg', 议价消息)
+Socket --> ChatPage: 消息发送成功
+deactivate Socket
+
+ChatPage -> ChatPage: list.value.push(消息)
+ChatPage -> ChatPage: scrollToBottom()
+ChatPage -> ChatPage: showSuccessToast("还价已发送")
+ChatPage -> ChatPage: showBuyerCounterDialog = false
+ChatPage --> Buyer: 还价已发送
+deactivate ChatPage
+
+== 卖家收到买家新还价 ==
+Seller -> Seller: 收到新的议价通知
+note right of Seller
+  可以再次使用AI智能回复
+  或手动选择接受/拒绝
+end note
+
+@enduml

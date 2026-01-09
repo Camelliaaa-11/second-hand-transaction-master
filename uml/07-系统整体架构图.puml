@@ -1,0 +1,276 @@
+@startuml 系统整体架构图
+!theme plain
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+title 二手交易平台 - 分层架构与服务解耦设计
+
+'==================================================
+' 第一层：前端展示层 (Presentation Layer)
+' 职责：用户界面展示、用户交互、路由管理
+' 耦合度：低耦合 - 仅依赖API客户端，不直接访问后端
+'==================================================
+package "前端展示层 (Presentation Layer)" #E8F5E9 {
+  
+  package "页面组件 (Views)" {
+    [Home.vue\n首页] as Home
+    [Detail.vue\n商品详情] as Detail
+    [Chat.vue\n聊天页面] as Chat
+    [Order.vue\n订单页面] as Order
+    [Mine.vue\n我的页面] as Mine
+    [Publish.vue\n发布商品] as Publish
+  }
+  
+  package "通信层 (Communication Layer)" {
+    [axios\nHTTP客户端] as HttpClient
+    [socket.io-client\nWebSocket客户端] as SocketClient
+  }
+  
+  note right of HttpClient
+    <b>职责：</b>
+    - RESTful API 调用封装
+    - 请求/响应拦截器
+    - 统一错误处理
+    
+    <b>解耦方式：</b>
+    - 面向接口编程
+    - 不关心后端实现细节
+  end note
+}
+
+'==================================================
+' 第二层：应用服务层 (Application Layer)
+' 职责：业务逻辑编排、API路由、请求分发
+' 耦合度：中等耦合 - 依赖业务逻辑层和数据访问层
+'==================================================
+package "应用服务层 (Application Layer)" #FFF3E0 {
+  
+  package "REST API 网关" {
+    [用户认证API\n登录/注册] as AuthAPI
+    [商品管理API\nCRUD] as ItemAPI
+    [订单管理API\n交易管理] as OrderAPI
+    [消息管理API\n聊天历史] as MessageAPI
+    [议价管理API\n砍价逻辑] as BargainAPI
+  }
+  
+  package "实时通信服务" {
+    [Flask-SocketIO\nWebSocket服务器] as WebSocket
+    [在线用户管理\n会话管理] as OnlineUsers
+  }
+  
+  note right of "REST API 网关"
+    <b>设计模式：</b>
+    - 网关模式 (Gateway Pattern)
+    - 请求路由
+    - 统一认证鉴权
+    
+    <b>解耦优势：</b>
+    - API版本控制 (/api/v1)
+    - 前后端分离
+    - 易于扩展和测试
+  end note
+}
+
+'==================================================
+' 第三层：业务逻辑层 (Business Logic Layer)
+' 职责：核心业务规则、数据处理、事务管理
+' 耦合度：低耦合 - 单一职责原则，各服务独立
+'==================================================
+package "业务逻辑层 (Domain Layer)" #E3F2FD {
+  [用户服务\nUserService] as UserService
+  [商品服务\nItemService] as ItemService
+  [订单服务\nOrderService] as OrderService
+  [消息服务\nMessageService] as MessageService
+  [议价服务\nBargainService] as BargainService
+  
+  note right of UserService
+    <b>设计原则：</b>
+    - 单一职责 (SRP)
+    - 开闭原则 (OCP)
+    - 依赖倒置 (DIP)
+    
+    <b>服务特征：</b>
+    - 无状态设计
+    - 原子性操作
+    - 可独立测试
+    
+    <b>耦合控制：</b>
+    - 服务间通过接口通信
+    - 避免直接依赖具体实现
+  end note
+}
+
+'==================================================
+' 第四层：AI智能体服务 (微服务架构)
+' 职责：智能议价决策、市场分析、策略推荐
+' 耦合度：极低耦合 - 独立部署、HTTP通信、可替换
+'==================================================
+package "AI智能体服务 (独立微服务)" #F3E5F5 {
+  [Flask Agent API\n端口:5011] as AgentAPI
+  [SellerAgent\n卖家策略] as SellerAgent
+  [BuyerAgent\n买家策略] as BuyerAgent
+  [NegotiationSession\n议价会话] as NegotiationSession
+  [MarketData\n市场数据分析] as MarketData
+  [BargainRules\n议价规则引擎] as Rules
+  
+  note left of AgentAPI
+    <b>微服务优势：</b>
+    - 独立部署和扩展
+    - 技术栈独立
+    - 故障隔离
+    - 版本独立迭代
+    
+    <b>解耦策略：</b>
+    - HTTP REST通信
+    - 异步处理可选
+    - 服务降级机制
+    - 超时熔断保护
+    
+    <b>可替换性：</b>
+    - 可升级为机器学习模型
+    - 可接入第三方AI服务
+    - 支持A/B测试
+  end note
+}
+
+'==================================================
+' 第五层：数据持久层 (Data Persistence Layer)
+' 职责：数据存储、数据访问、事务管理
+' 耦合度：低耦合 - ORM抽象、数据库无关性
+'==================================================
+database "数据持久层 (MySQL + ORM)" #FFEBEE {
+  [users\n用户表] as UsersTable
+  [items\n商品表] as ItemsTable
+  [orders\n订单表] as OrdersTable
+  [messages\n消息表] as MessagesTable
+  [bargain_logs\n议价记录表] as BargainLogsTable
+  [categories\n分类表] as CategoriesTable
+  [favorites\n收藏表] as FavoritesTable
+  [reviews\n评价表] as ReviewsTable
+  
+  note right of UsersTable
+    <b>数据访问层设计：</b>
+    - ORM抽象 (SQLAlchemy)
+    - 数据库无关性
+    - 连接池管理
+    
+    <b>解耦优势：</b>
+    - 易于切换数据库
+    - SQL注入防护
+    - 事务自动管理
+  end note
+}
+
+'==================================================
+' 依赖关系图 (Dependency Graph)
+' 遵循依赖倒置原则：高层不依赖低层，双方依赖抽象
+'==================================================
+
+'-- 前端层依赖 (低耦合) --
+Home -down-> HttpClient : 依赖注入
+Detail -down-> HttpClient : 依赖注入
+Chat -down-> HttpClient : 依赖注入
+Chat -down-> SocketClient : 双向通信
+Order -down-> HttpClient : 依赖注入
+Mine -down-> HttpClient : 依赖注入
+Publish -down-> HttpClient : 依赖注入
+
+'-- HTTP通信 (松耦合 - REST接口) --
+HttpClient -down-> AuthAPI : <color:blue>RESTful\n松耦合
+HttpClient -down-> ItemAPI : <color:blue>RESTful\n松耦合
+HttpClient -down-> OrderAPI : <color:blue>RESTful\n松耦合
+HttpClient -down-> MessageAPI : <color:blue>RESTful\n松耦合
+HttpClient -down-> BargainAPI : <color:blue>RESTful\n松耦合
+
+'-- WebSocket通信 (松耦合 - 事件驱动) --
+SocketClient -down-> WebSocket : <color:green>WebSocket\n事件驱动
+WebSocket -right-> OnlineUsers : 状态管理
+
+'-- API网关到业务逻辑 (中耦合 - 服务调用) --
+AuthAPI -down-> UserService : 服务调用
+ItemAPI -down-> ItemService : 服务调用
+OrderAPI -down-> OrderService : 服务调用
+MessageAPI -down-> MessageService : 服务调用
+BargainAPI -down-> BargainService : 服务调用
+
+'-- 业务逻辑到数据层 (低耦合 - ORM抽象) --
+UserService -down-> UsersTable : <color:purple>ORM抽象\n数据库无关
+ItemService -down-> ItemsTable : <color:purple>ORM抽象
+OrderService -down-> OrdersTable : <color:purple>ORM抽象
+MessageService -down-> MessagesTable : <color:purple>ORM抽象
+BargainService -down-> BargainLogsTable : <color:purple>ORM抽象
+
+'-- 跨服务调用 (极低耦合 - 微服务通信) --
+BargainService -right-> AgentAPI : <color:red><b>HTTP远程调用\n微服务解耦\n可独立部署
+
+'-- AI服务内部依赖 (模块化设计) --
+AgentAPI -down-> SellerAgent : 策略工厂
+AgentAPI -down-> BuyerAgent : 策略工厂
+SellerAgent -down-> NegotiationSession : 会话管理
+BuyerAgent -down-> NegotiationSession : 会话管理
+NegotiationSession -right-> MarketData : 数据分析
+NegotiationSession -right-> Rules : 规则引擎
+
+'-- Agent服务数据访问 (独立数据源) --
+AgentAPI -down-> UsersTable : <color:orange>跨服务\n数据查询
+AgentAPI -down-> ItemsTable : <color:orange>跨服务\n数据查询
+AgentAPI -down-> OrdersTable : <color:orange>跨服务\n数据查询
+
+'==================================================
+' 架构说明注释
+'==================================================
+
+note as N1
+  <b>【架构层次与耦合度分析】</b>
+  
+  <b>1. 分层架构 (Layered Architecture)</b>
+  ────────────────────────────────────
+  展示层 → 应用层 → 业务层 → 数据层
+  每层只依赖下一层，单向依赖，降低耦合
+  
+  <b>2. 耦合度评估</b>
+  ────────────────────────────────────
+  • <color:blue>前端-后端：</color> 松耦合 (REST/WebSocket接口)
+  • <color:green>API-业务：</color> 中耦合 (直接服务调用)
+  • <color:purple>业务-数据：</color> 低耦合 (ORM抽象层)
+  • <color:red>主服务-AI服务：</color> 极低耦合 (微服务架构)
+  
+  <b>3. 解耦设计亮点</b>
+  ────────────────────────────────────
+  ✅ <b>微服务分离：</b> AI服务独立部署 (端口5011)
+  ✅ <b>前后端分离：</b> 纯接口通信，无页面渲染耦合
+  ✅ <b>ORM抽象：</b> 可无痛切换数据库 (MySQL→PostgreSQL)
+  ✅ <b>依赖注入：</b> 前端组件通过axios/socket注入
+  ✅ <b>接口隔离：</b> 每个API模块职责单一
+  
+  <b>4. 扩展性设计</b>
+  ────────────────────────────────────
+  📌 可横向扩展：AI服务可部署多实例负载均衡
+  📌 可纵向扩展：业务层服务可拆分为更多微服务
+  📌 技术栈解耦：前端可替换为React、后端可迁移至Go
+end note
+
+note as N2
+  <b>【设计模式应用】</b>
+  
+  • <b>网关模式 (Gateway)：</b> REST API统一入口
+  • <b>策略模式 (Strategy)：</b> SellerAgent/BuyerAgent
+  • <b>工厂模式 (Factory)：</b> Agent创建
+  • <b>观察者模式 (Observer)：</b> WebSocket事件监听
+  • <b>单例模式 (Singleton)：</b> 数据库连接池
+  • <b>仓储模式 (Repository)：</b> ORM数据访问
+end note
+
+note as N3
+  <b>【故障隔离与降级】</b>
+  
+  ⚠️ AI服务故障不影响主业务
+  ⚠️ 设置超时熔断 (3秒)
+  ⚠️ 降级策略：返回默认建议
+  ⚠️ WebSocket断线自动重连
+end note
+
+N1 -[hidden]right- N2
+N2 -[hidden]right- N3
+
+@enduml

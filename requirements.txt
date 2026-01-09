@@ -1,0 +1,26 @@
+# Flask 核心
+Flask==2.3.0
+Werkzeug==2.3.7
+Jinja2==3.1.2
+
+# 数据库
+Flask-SQLAlchemy==3.0.5
+
+# WebSocket
+Flask-SocketIO==5.3.6
+python-socketio==5.9.0
+eventlet==0.33.3
+
+# 跨域
+Flask-CORS==4.0.0
+
+# AI 服务 - 使用最新稳定版
+zhipuai>=2.1.5
+
+# 修复 sniffio 缺失问题
+sniffio>=1.3.0
+
+# 其他依赖
+MarkupSafe==2.1.3
+itsdangerous==2.1.2
+click==8.1.7

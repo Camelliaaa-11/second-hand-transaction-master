@@ -1,0 +1,168 @@
+@startuml 买家下单支付流程
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "买家" as Buyer
+participant "Detail.vue" as DetailPage
+participant "Order.vue" as OrderPage
+participant "PaySuccess.vue" as PaySuccessPage
+participant "Flask API" as API
+participant "Database" as DB
+
+== 买家查看商品详情 ==
+Buyer -> DetailPage: 访问 /detail/:id
+activate DetailPage
+DetailPage -> API: GET /api/v1/items/:id
+activate API
+API -> DB: 查询商品信息
+activate DB
+DB --> API: 商品数据
+deactivate DB
+API --> DetailPage: 返回商品详情
+deactivate API
+DetailPage --> Buyer: 显示商品详情
+deactivate DetailPage
+
+== 买家点击购买 ==
+Buyer -> DetailPage: 点击"立即购买"按钮
+activate DetailPage
+DetailPage -> DetailPage: 检查是否登录
+alt 未登录
+    DetailPage -> DetailPage: router.push('/login')
+    DetailPage --> Buyer: 跳转到登录页
+else 已登录
+    DetailPage -> DetailPage: router.push('/order/:id')
+    DetailPage --> Buyer: 跳转到订单确认页
+end
+deactivate DetailPage
+
+== 确认订单信息 ==
+Buyer -> OrderPage: 访问 /order/:id
+activate OrderPage
+OrderPage -> API: GET /api/v1/items/:id
+activate API
+API -> DB: 查询商品信息
+activate DB
+DB --> API: 商品数据
+deactivate DB
+API --> OrderPage: 返回商品详情
+deactivate API
+
+OrderPage -> OrderPage: 计算订单金额
+note right of OrderPage
+  实付款 = 商品价格
+  （议价后的current_price）
+end note
+OrderPage --> Buyer: 显示订单确认页
+deactivate OrderPage
+
+== 买家提交订单 ==
+Buyer -> OrderPage: 填写收货地址
+Buyer -> OrderPage: 点击"提交订单"
+activate OrderPage
+
+OrderPage -> API: POST /api/v1/orders/create
+note left
+  {
+    buyer_id: 买家ID,
+    item_id: 商品ID,
+    address: 收货地址,
+    phone: 联系电话,
+    total_price: 订单金额
+  }
+end note
+
+activate API
+API -> DB: 创建订单记录
+activate DB
+note right of DB
+  INSERT INTO orders
+  (buyer_id, item_id, seller_id,
+   total_price, address, phone,
+   status, created_at)
+  VALUES (...)
+end note
+DB --> API: 订单ID
+deactivate DB
+
+API -> DB: 更新商品状态为"已售出"
+activate DB
+note right of DB
+  UPDATE items
+  SET status = 'sold'
+  WHERE id = item_id
+end note
+DB --> API: 更新成功
+deactivate DB
+
+API --> OrderPage: 返回订单信息
+note left
+  {
+    success: true,
+    data: {
+      order_id: 订单ID,
+      order_no: 订单编号,
+      total_price: 订单金额
+    }
+  }
+end note
+deactivate API
+
+OrderPage --> Buyer: 订单创建成功
+deactivate OrderPage
+
+== 买家支付订单 ==
+Buyer -> OrderPage: 点击"去支付"
+activate OrderPage
+OrderPage -> OrderPage: 模拟支付流程
+note right of OrderPage
+  实际项目中应对接
+  支付宝/微信支付接口
+  
+  当前为模拟支付：
+  直接跳转到支付成功页
+end note
+
+OrderPage -> PaySuccessPage: router.push('/pay-success')
+deactivate OrderPage
+
+activate PaySuccessPage
+PaySuccessPage -> API: POST /api/v1/orders/:id/pay
+activate API
+API -> DB: 更新订单状态为"已支付"
+activate DB
+note right of DB
+  UPDATE orders
+  SET status = 'paid',
+      paid_at = NOW()
+  WHERE id = order_id
+end note
+DB --> API: 更新成功
+deactivate DB
+
+API -> DB: 增加卖家余额
+activate DB
+note right of DB
+  UPDATE users
+  SET balance = balance + order_amount
+  WHERE id = seller_id
+end note
+DB --> API: 余额更新成功
+deactivate DB
+
+API --> PaySuccessPage: 支付成功
+deactivate API
+
+PaySuccessPage --> Buyer: 显示支付成功页面
+note right of Buyer
+  显示内容：
+  - 订单编号
+  - 支付金额
+  - 收货地址
+  - "查看订单"按钮
+  - "返回首页"按钮
+end note
+deactivate PaySuccessPage
+
+@enduml
